@@ -36,7 +36,7 @@ func init() {
 	flag.StringVar(&host, "host", "127.0.0.1", "MySQL `host`")
 	flag.IntVar(&port, "port", 3306, "MySQL `port`")
 	flag.StringVar(&user, "user", "root", "MySQL `user`")
-	flag.StringVar(&password, "password", "null", "MySQL `password` for user")
+	flag.StringVar(&password, "password", "", "MySQL `password` for user")
 	flag.StringVar(&database, "database", "default", "specify `database`")
 	flag.StringVar(&queries, "queries", "", "`SQL` to run in MySQL, can run multiple SQL: select 1;select 1")
 	flag.StringVar(&crontab, "crontab", "0 */5 * * * *", "Execute at `crontab`")
@@ -44,12 +44,18 @@ func init() {
 	//flag.BoolVar(&Concurrent, "concurrent", false, "Enable concurrent for all queries")
 	flag.StringVar(&files, "files", "", "SQL files to execute: 1.sql,2.sql")
 	//flag.BoolVar(&print, "print", false, "Enable print query result")
+	flag.Usage = usage
 
 	logFile, err := os.OpenFile("crontabMysql.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		logger.Fatal(err)
 	}
 	logger = log.New(logFile, "TRACE: ", log.Ldate|log.Lmicroseconds|log.Lshortfile)
+}
+
+func usage() {
+	fmt.Println("A crontab tool for MySQL, example:\ncrontab_mysql -host IP -user root -crontab '0 */5 * * * *' -files t.sql")
+	flag.PrintDefaults()
 }
 
 func runAnySql(DB *sql.DB, query string) error {
