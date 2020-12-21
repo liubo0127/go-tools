@@ -8,10 +8,10 @@ import (
 	"log"
 	"os"
 	"strings"
-
-	"github.com/robfig/cron/v3"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/robfig/cron/v3"
 )
 
 var (
@@ -22,10 +22,12 @@ var (
 	database string
 	queries  string
 	crontab  string
-	//Concurrent bool
-	help  bool
-	files string
+	help     bool
+	files    string
 	//print bool
+	pttable  string
+	ptprefix string
+	ptformat string
 )
 
 var logger *log.Logger
@@ -41,8 +43,10 @@ func init() {
 	flag.StringVar(&queries, "queries", "", "`SQL` to run in MySQL, can run multiple SQL: select 1;select 1")
 	flag.StringVar(&crontab, "crontab", "0 */5 * * * *", "Execute at `crontab`")
 	flag.BoolVar(&help, "help", false, "help message")
-	//flag.BoolVar(&Concurrent, "concurrent", false, "Enable concurrent for all queries")
 	flag.StringVar(&files, "files", "", "SQL files to execute: 1.sql,2.sql")
+	flag.StringVar(&pttable, "pttable", "", "tables contains partition")
+	flag.StringVar(&ptprefix, "ptprefix", "p", "the prefix of partition name")
+	flag.StringVar(&ptformat, "ptinterval", "month", "the format for partition name: [year|month|day]")
 	//flag.BoolVar(&print, "print", false, "Enable print query result")
 	flag.Usage = usage
 
@@ -50,7 +54,7 @@ func init() {
 	if err != nil {
 		logger.Fatal(err)
 	}
-	logger = log.New(logFile, "TRACE: ", log.Ldate|log.Lmicroseconds|log.Lshortfile)
+	logger = log.New(logFile, "", log.Ldate|log.Ltime|log.Lshortfile)
 }
 
 func usage() {
@@ -59,9 +63,9 @@ func usage() {
 }
 
 func runAnySql(DB *sql.DB, query string) error {
+	logger.Printf("[INFO] Execute SQL: %s", query)
 	_, err := DB.Exec(query)
 	if err != nil {
-		fmt.Printf("Execute SQL [%s] failed, error: %s\n", query, err.Error())
 		logger.Printf("[FATAL] Execute SQL [%s] failed, error: %s\n", query, err.Error())
 		return nil
 	}
@@ -69,25 +73,21 @@ func runAnySql(DB *sql.DB, query string) error {
 	return nil
 }
 
-func runQuery(DB *sql.DB, query string) error {
+func runQuery(DB *sql.DB, query string) (map[int]map[string]string, error) {
+	logger.Printf("[INFO] Execute SQL: %s", query)
 	result, err := DB.Query(query)
 	if err != nil {
-		fmt.Printf("Execute SQL [%s] failed, error: %s\n", query, err.Error())
 		logger.Printf("[FATAL] Execute SQL [%s] failed, error: %s\n", query, err.Error())
-		return nil
+		return nil, nil
 	}
 
+	results := make(map[int]map[string]string)
+	i := 0
 	if true {
 		cols, err := result.Columns()
 		if err != nil {
-			log.Printf("[WARN] scan columns error: %s\n", err.Error())
+			logger.Printf("[WARN] scan columns error: %s\n", err.Error())
 		}
-
-		fmt.Println()
-		for _, col := range cols {
-			fmt.Printf("%s ", col)
-		}
-		fmt.Println()
 
 		values := make([][]byte, len(cols))
 		scans := make([]interface{}, len(cols))
@@ -95,24 +95,27 @@ func runQuery(DB *sql.DB, query string) error {
 		for i := range scans {
 			scans[i] = &values[i]
 		}
+
 		for result.Next() {
 			if err := result.Scan(scans...); err != nil {
-				log.Printf("[WARN] scan data failed, error: %s\n", err.Error())
+				logger.Printf("[WARN] scan data failed, error: %s\n", err.Error())
+				continue
 			}
-
-			for _, value := range values {
-				fmt.Printf("%s ", string(value))
+			row := make(map[string]string)
+			i++
+			for idx, value := range values {
+				key := cols[idx]
+				row[key] = string(value)
 			}
-			fmt.Println()
+			results[i] = row
 		}
 	}
-	return nil
+	return results, nil
 }
 
 func runFile(DB *sql.DB, file string) error {
 	content, err := ioutil.ReadFile(file)
 	if err != nil {
-		fmt.Printf("Read %s failed, error: %s", file, err.Error())
 		logger.Printf("[WARN] Read %s failed, error: %s", file, err.Error())
 		return err
 	}
@@ -122,8 +125,7 @@ func runFile(DB *sql.DB, file string) error {
 			continue
 		}
 		if err := runAnySql(DB, qr); err != nil {
-			fmt.Printf("Execute sql [%s] in %s failed, error: %s", qr, file, err.Error())
-			logger.Printf("[FATAL] Execute sql [%s] in %s failed, error: %s", qr, file, err.Error())
+			logger.Fatalf("[FATAL] Execute sql [%s] in %s failed, error: %s", qr, file, err.Error())
 			return err
 		}
 	}
@@ -138,10 +140,10 @@ func requestMysql(user, password, host string, port int, database string) error 
 	defer func() { stats = 0 }()
 
 	if err := DB.Ping(); err != nil {
-		fmt.Printf("connection to mysql failed: %s\n", err.Error())
-		logger.Printf("connection to mysql failed: %s\n", err.Error())
+		logger.Fatalf("[FATAL] connection to mysql failed: %s\n", err.Error())
 		return err
 	}
+
 	if queries != "" {
 		for _, query := range strings.Split(queries, ";") {
 			if query != "" {
@@ -164,6 +166,52 @@ func requestMysql(user, password, host string, port int, database string) error 
 	return nil
 }
 
+type createPartition struct {
+	user        string
+	password    string
+	host        string
+	port        int
+	database    string
+	table       string
+	ptname      string
+	ptthreshold string
+}
+
+func (c createPartition) Run() {
+	conn := fmt.Sprintf("%s:%s@%s(%s:%d)/%s", c.user, c.password, "tcp", c.host, c.port, c.database)
+	DB, _ := sql.Open("mysql", conn)
+	defer DB.Close()
+
+	if err := DB.Ping(); err != nil {
+		logger.Fatalf("[FATAL] connection to mysql failed: %s\n", err.Error())
+		return
+	}
+	results, err := runQuery(DB, fmt.Sprintf("select PARTITION_NAME,PARTITION_EXPRESSION,CREATE_TIME from information_schema.partitions "+
+		"where table_schema='%s' and table_name='%s' order by PARTITION_NAME desc limit 1;", c.database, c.table))
+	if err != nil {
+		logger.Fatalf("[FATAL] Get schema for %s.%s failed, error: %s", c.database, c.table, err.Error())
+		return
+	}
+	logger.Printf("[INFO] Max partition is %s for %s.%s", results[1]["PARTITION_NAME"], c.database, c.table)
+
+	//partition_expression := results[1]["PARTITION_EXPRESSION"]
+
+	existMaxPT := results[1]["PARTITION_NAME"]
+
+	if existMaxPT < c.ptname {
+		logger.Printf("[INFO] Ready to add partition %s for %s.%s", c.ptname, c.database, c.table)
+		sqlCMD := fmt.Sprintf("alter table %s add partition (partition %s values less than (unix_timestamp(\"%s\")*1000))", c.table, c.ptname, c.ptthreshold)
+		if err := runAnySql(DB, sqlCMD); err != nil {
+			logger.Printf("[WARN] Add partition %s failed for %s.%s: error: %s", c.ptname, c.database, c.table, err.Error())
+			return
+		} else {
+			logger.Printf("[INFO] Add partition %s successful for %s.%s!", c.ptname, c.database, c.table)
+		}
+	} else {
+		logger.Printf("[INFO] %s.%s already have partition %s, skip add", c.database, c.table, c.ptname)
+	}
+}
+
 func main() {
 	flag.Parse()
 	if help {
@@ -171,29 +219,83 @@ func main() {
 		return
 	}
 
+	if err := requestMysql(user, password, host, port, database); err != nil {
+		return
+	}
+
 	if (queries == "" && files == "") || (queries != "" && files != "") {
 		fmt.Println("Please input sql through `--queries` or `--files`.")
-		logger.Println("Please input sql through `--queries` or `--files`.")
 		flag.Usage()
 		return
 	}
 
 	ct := cron.New(cron.WithSeconds())
 
-	num := 0
+	// crontab to run sql
 	if _, err := ct.AddFunc(crontab, func() {
 		if stats == 1 {
 			return
 		}
 		stats = 1
-		num++
-		logger.Printf("[INFO] Execute the %d times", num)
 		if err := requestMysql(user, password, host, port, database); err != nil {
 			return
 		}
 	}); err != nil {
-		logger.Printf("[FATAL] %s", err.Error())
+		logger.Fatalf("[FATAL] %s", err.Error())
 		return
+	}
+
+	// crontab to create partition
+	nowTime := time.Now()
+
+	var (
+		t1        string
+		threshold string
+		spec      string
+		newPT     string
+	)
+	if ptformat == "month" {
+		t1 = "200601"
+		threshold = fmt.Sprintf("%s-01 00:00:00", nowTime.AddDate(0, 1, 0).Format("2006-01"))
+		newPT = fmt.Sprintf("%s%s", ptprefix, nowTime.Format(t1))
+		spec = "0 0 * 1 * *"
+	} else if ptformat == "day" {
+		t1 = "20060102"
+		threshold = fmt.Sprintf("%s 00:00:00", nowTime.AddDate(0, 0, 1).Format("2006-01-02"))
+		newPT = fmt.Sprintf("%s%s", ptprefix, nowTime.Format(t1))
+		spec = "0 0 * * * *"
+	} else if ptformat == "year" {
+		t1 = "2006"
+		threshold = fmt.Sprintf("%s-01-01 00:00:00", nowTime.AddDate(1, 0, 0).Format("2006"))
+		newPT = fmt.Sprintf("%s%s", ptprefix, nowTime.Format(t1))
+		spec = "0 0 * 1 1 *"
+	}
+
+	for _, table := range strings.Split(pttable, ",") {
+		var (
+			db, tb string
+		)
+		if strings.Contains(table, ".") {
+			sp := strings.Split(table, ".")
+			db = sp[0]
+			tb = sp[1]
+		} else {
+			db = database
+			tb = table
+		}
+		if _, err := ct.AddJob(spec, createPartition{
+			user:        user,
+			password:    password,
+			host:        host,
+			port:        port,
+			database:    db,
+			table:       tb,
+			ptname:      newPT,
+			ptthreshold: threshold,
+		}); err != nil {
+			logger.Fatalf("[FATAL] %s", err.Error())
+			return
+		}
 	}
 
 	ct.Start()
