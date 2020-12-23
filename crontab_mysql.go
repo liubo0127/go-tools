@@ -52,7 +52,7 @@ func init() {
 
 	logFile, err := os.OpenFile("crontabMysql.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		logger.Fatal(err)
+		logger.Println(err.Error())
 	}
 	logger = log.New(logFile, "", log.Ldate|log.Ltime|log.Lshortfile)
 }
@@ -125,7 +125,7 @@ func runFile(DB *sql.DB, file string) error {
 			continue
 		}
 		if err := runAnySql(DB, qr); err != nil {
-			logger.Fatalf("[FATAL] Execute sql [%s] in %s failed, error: %s", qr, file, err.Error())
+			logger.Printf("[FATAL] Execute sql [%s] in %s failed, error: %s", qr, file, err.Error())
 			return err
 		}
 	}
@@ -140,7 +140,7 @@ func requestMysql(user, password, host string, port int, database string) error 
 	defer func() { stats = 0 }()
 
 	if err := DB.Ping(); err != nil {
-		logger.Fatalf("[FATAL] connection to mysql failed: %s\n", err.Error())
+		logger.Printf("[FATAL] connection to mysql failed: %s\n", err.Error())
 		return err
 	}
 
@@ -183,13 +183,13 @@ func (c createPartition) Run() {
 	defer DB.Close()
 
 	if err := DB.Ping(); err != nil {
-		logger.Fatalf("[FATAL] connection to mysql failed: %s\n", err.Error())
+		logger.Printf("[FATAL] connection to mysql failed: %s\n", err.Error())
 		return
 	}
 	results, err := runQuery(DB, fmt.Sprintf("select PARTITION_NAME,PARTITION_EXPRESSION,CREATE_TIME from information_schema.partitions "+
 		"where table_schema='%s' and table_name='%s' order by PARTITION_NAME desc limit 1;", c.database, c.table))
 	if err != nil {
-		logger.Fatalf("[FATAL] Get schema for %s.%s failed, error: %s", c.database, c.table, err.Error())
+		logger.Printf("[FATAL] Get schema for %s.%s failed, error: %s", c.database, c.table, err.Error())
 		return
 	}
 	logger.Printf("[INFO] Max partition is %s for %s.%s", results[1]["PARTITION_NAME"], c.database, c.table)
@@ -241,7 +241,7 @@ func main() {
 			return
 		}
 	}); err != nil {
-		logger.Fatalf("[FATAL] %s", err.Error())
+		logger.Printf("[FATAL] %s", err.Error())
 		return
 	}
 
@@ -293,7 +293,7 @@ func main() {
 			ptname:      newPT,
 			ptthreshold: threshold,
 		}); err != nil {
-			logger.Fatalf("[FATAL] %s", err.Error())
+			logger.Printf("[FATAL] %s", err.Error())
 			return
 		}
 	}
