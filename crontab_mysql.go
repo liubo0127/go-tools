@@ -27,11 +27,11 @@ var (
 	help     bool
 	files    string
 	//print bool
-	pttable  string
-	ptprefix string
-	ptformat string
-	webhook  string
-	mention  string
+	pttable    string
+	ptprefix   string
+	ptinterval string
+	webhook    string
+	mention    string
 )
 
 var logger *log.Logger
@@ -50,7 +50,7 @@ func init() {
 	flag.StringVar(&files, "files", "", "SQL files to execute: 1.sql,2.sql")
 	flag.StringVar(&pttable, "pttable", "", "tables contains partition")
 	flag.StringVar(&ptprefix, "ptprefix", "p", "the prefix of partition name")
-	flag.StringVar(&ptformat, "ptinterval", "month", "the format for partition name: [year|month|day]")
+	flag.StringVar(&ptinterval, "ptinterval", "month", "the format for partition name: [year|month|day]")
 	flag.StringVar(&webhook, "webhook", "", "Through `webhook` to send warn message")
 	flag.StringVar(&mention, "mention", "@all", "Member `phone`: 158xxxx,136xxxx")
 	//flag.BoolVar(&print, "print", false, "Enable print query result")
@@ -203,15 +203,15 @@ func (c createPartition) Run() {
 		threshold string
 		newPT     string
 	)
-	if ptformat == "month" {
+	if ptinterval == "month" {
 		t1 = "200601"
 		threshold = fmt.Sprintf("%s-01 00:00:00", nowTime.AddDate(0, 1, 0).Format("2006-01"))
 		newPT = fmt.Sprintf("%s%s", ptprefix, nowTime.Format(t1))
-	} else if ptformat == "day" {
+	} else if ptinterval == "day" {
 		t1 = "20060102"
 		threshold = fmt.Sprintf("%s 00:00:00", nowTime.AddDate(0, 0, 1).Format("2006-01-02"))
 		newPT = fmt.Sprintf("%s%s", ptprefix, nowTime.Format(t1))
-	} else if ptformat == "year" {
+	} else if ptinterval == "year" {
 		t1 = "2006"
 		threshold = fmt.Sprintf("%s-01-01 00:00:00", nowTime.AddDate(1, 0, 0).Format("2006"))
 		newPT = fmt.Sprintf("%s%s", ptprefix, nowTime.Format(t1))
@@ -312,12 +312,16 @@ func main() {
 	if pttable != "" {
 		var spec string
 
-		if ptformat == "month" {
+		if ptinterval == "month" {
 			spec = "0 0 * 1 * *"
-		} else if ptformat == "day" {
+		} else if ptinterval == "day" {
 			spec = "0 0 * * * *"
-		} else if ptformat == "year" {
+		} else if ptinterval == "year" {
 			spec = "0 0 * 1 1 *"
+		} else {
+			logger.Println("[INFO] --ptinterval must be one of month/year/day")
+			fmt.Println("--ptinterval must be one of month/year/day")
+			return
 		}
 		for _, table := range strings.Split(pttable, ",") {
 			var (
