@@ -1,6 +1,8 @@
 # go-tools
 Crontab tools for MySQL
 
+## args
+
 ```
 $ crontab_mysql -h
 A crontab tool for MySQL, example:
@@ -15,6 +17,8 @@ crontab_mysql -host IP -user root -crontab '0 */5 * * * *' -files t.sql
     	help message
   -host host
     	MySQL host (default "127.0.0.1")
+  -mention phone
+    	Member phone: 158xxxx,136xxxx (default "@all")
   -password password
     	MySQL password for user
   -port port
@@ -29,5 +33,6 @@ crontab_mysql -host IP -user root -crontab '0 */5 * * * *' -files t.sql
     	SQL to run in MySQL, can run multiple SQL: select 1;select 1
   -user user
     	MySQL user (default "root")
-
+  -webhook webhook
+    	Through webhook to send warn message
 ```
