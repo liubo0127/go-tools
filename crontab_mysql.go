@@ -32,6 +32,7 @@ var (
 	ptinterval string
 	webhook    string
 	mention    string
+	service    string
 )
 
 var logger *log.Logger
@@ -53,6 +54,7 @@ func init() {
 	flag.StringVar(&ptinterval, "ptinterval", "month", "the format for partition name: [year|month|day]")
 	flag.StringVar(&webhook, "webhook", "", "Through `webhook` to send warn message")
 	flag.StringVar(&mention, "mention", "@all", "Member `phone`: 158xxxx,136xxxx")
+	flag.StringVar(&service, "service", "", "name of mentioned `service`")
 	//flag.BoolVar(&print, "print", false, "Enable print query result")
 	flag.Usage = usage
 
@@ -261,8 +263,14 @@ func qwWarn(warn string, err error) {
 		}
 	}
 
-	jsonValue := fmt.Sprintf(`{"msgtype": "text", "text": {"content": "%s", "mentioned_mobile_list": [%s]}}`,
-		message, mentionStrList)
+	var jsonValue string
+	if service != "" {
+		jsonValue = fmt.Sprintf(`{"msgtype": "text", "text": {"content": "[%s]%s", "mentioned_mobile_list": [%s]}}`,
+			service, message, mentionStrList)
+	} else {
+		jsonValue = fmt.Sprintf(`{"msgtype": "text", "text": {"content": "%s", "mentioned_mobile_list": [%s]}}`,
+			message, mentionStrList)
+	}
 	resp, errI := http.Post(webhook, "application/json", bytes.NewBuffer([]byte(jsonValue)))
 
 	if errI != nil {
