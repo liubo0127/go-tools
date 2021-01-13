@@ -33,6 +33,7 @@ var (
 	webhook    string
 	mention    string
 	service    string
+	logfile    string
 )
 
 var logger *log.Logger
@@ -55,14 +56,10 @@ func init() {
 	flag.StringVar(&webhook, "webhook", "", "Through `webhook` to send warn message")
 	flag.StringVar(&mention, "mention", "@all", "Member `phone`: 158xxxx,136xxxx")
 	flag.StringVar(&service, "service", "", "name of mentioned `service`")
+	flag.StringVar(&logfile, "logfile", "crontabMysql.log", "`logFile`")
 	//flag.BoolVar(&print, "print", false, "Enable print query result")
 	flag.Usage = usage
 
-	logFile, err := os.OpenFile("crontabMysql.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		logger.Println(err.Error())
-	}
-	logger = log.New(logFile, "", log.Ldate|log.Ltime|log.Lshortfile)
 }
 
 func usage() {
@@ -288,6 +285,12 @@ func main() {
 		flag.Usage()
 		return
 	}
+
+	logFile, err := os.OpenFile(logfile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		logger.Println(err.Error())
+	}
+	logger = log.New(logFile, "", log.Ldate|log.Ltime|log.Lshortfile)
 
 	if err := requestMysql(user, password, host, port, database); err != nil {
 		return
