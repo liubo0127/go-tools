@@ -205,15 +205,15 @@ func (c createPartition) Run() {
 	if ptinterval == "month" {
 		t1 = "200601"
 		threshold = fmt.Sprintf("%s-01 00:00:00", nowTime.AddDate(0, 1, 0).Format("2006-01"))
-		newPT = fmt.Sprintf("%s%s", ptprefix, nowTime.Format(t1))
+		newPT = fmt.Sprintf("%s%s", ptprefix, nowTime.AddDate(0, 1, 0).Format(t1))
 	} else if ptinterval == "day" {
 		t1 = "20060102"
 		threshold = fmt.Sprintf("%s 00:00:00", nowTime.AddDate(0, 0, 1).Format("2006-01-02"))
-		newPT = fmt.Sprintf("%s%s", ptprefix, nowTime.Format(t1))
+		newPT = fmt.Sprintf("%s%s", ptprefix, nowTime.AddDate(0, 1, 0).Format(t1))
 	} else if ptinterval == "year" {
 		t1 = "2006"
 		threshold = fmt.Sprintf("%s-01-01 00:00:00", nowTime.AddDate(1, 0, 0).Format("2006"))
-		newPT = fmt.Sprintf("%s%s", ptprefix, nowTime.Format(t1))
+		newPT = fmt.Sprintf("%s%s", ptprefix, nowTime.AddDate(0, 1, 0).Format(t1))
 	}
 
 	results, err := runQuery(DB, fmt.Sprintf("select PARTITION_NAME,PARTITION_EXPRESSION,CREATE_TIME from information_schema.partitions "+
