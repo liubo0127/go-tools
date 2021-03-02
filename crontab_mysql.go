@@ -204,16 +204,16 @@ func (c createPartition) Run() {
 	)
 	if ptinterval == "month" {
 		t1 = "200601"
-		threshold = fmt.Sprintf("%s-01 00:00:00", nowTime.AddDate(0, 1, 0).Format("2006-01"))
+		threshold = fmt.Sprintf("%s-01 00:00:00", nowTime.AddDate(0, 2, 0).Format("2006-01"))
 		newPT = fmt.Sprintf("%s%s", ptprefix, nowTime.AddDate(0, 1, 0).Format(t1))
 	} else if ptinterval == "day" {
 		t1 = "20060102"
-		threshold = fmt.Sprintf("%s 00:00:00", nowTime.AddDate(0, 0, 1).Format("2006-01-02"))
-		newPT = fmt.Sprintf("%s%s", ptprefix, nowTime.AddDate(0, 1, 0).Format(t1))
+		threshold = fmt.Sprintf("%s 00:00:00", nowTime.AddDate(0, 0, 2).Format("2006-01-02"))
+		newPT = fmt.Sprintf("%s%s", ptprefix, nowTime.AddDate(0, 0, 1).Format(t1))
 	} else if ptinterval == "year" {
 		t1 = "2006"
-		threshold = fmt.Sprintf("%s-01-01 00:00:00", nowTime.AddDate(1, 0, 0).Format("2006"))
-		newPT = fmt.Sprintf("%s%s", ptprefix, nowTime.AddDate(0, 1, 0).Format(t1))
+		threshold = fmt.Sprintf("%s-01-01 00:00:00", nowTime.AddDate(2, 0, 0).Format("2006"))
+		newPT = fmt.Sprintf("%s%s", ptprefix, nowTime.AddDate(1, 0, 0).Format(t1))
 	}
 
 	results, err := runQuery(DB, fmt.Sprintf("select PARTITION_NAME,PARTITION_EXPRESSION,CREATE_TIME from information_schema.partitions "+
@@ -324,11 +324,11 @@ func main() {
 		var spec string
 
 		if ptinterval == "month" {
-			spec = "0 0 * 1 * *"
+			spec = "0 0 * 3 * *"
 		} else if ptinterval == "day" {
-			spec = "0 0 * * * *"
+			spec = "0 3 * * * *"
 		} else if ptinterval == "year" {
-			spec = "0 0 * 1 1 *"
+			spec = "0 0 * 3 1 *"
 		} else {
 			logger.Println("[INFO] --ptinterval must be one of month/year/day")
 			fmt.Println("--ptinterval must be one of month/year/day")
